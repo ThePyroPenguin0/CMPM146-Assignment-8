@@ -47,13 +47,19 @@ public class MapGenerator : MonoBehaviour
 
     bool GenerateWithBacktracking(List<Vector2Int> occupied, List<Door> doors, int depth)
     {
-        Debug.Log("Entered GenerateWithBackTracking.");
+        Debug.Log($"Entered GenerateWithBackTracking. Depth: {depth}");
         iterations++;
+        if (depth > MAX_SIZE)
+        {
+            Debug.LogWarning("Reached maximum depth, stopping generation.");
+            return false;
+        }
         if (doors.Count == 0)
         {
             if (occupied.Count == 0) return true;
             else return false;
         }
+
         Door currentDoor = doors[doors.Count - 1];
         doors.RemoveAt(doors.Count - 1);
 
@@ -80,6 +86,10 @@ public class MapGenerator : MonoBehaviour
 
         // Create a new room from the hallway
         List<Room> randomRooms = rooms;
+        if (randomRooms == null || randomRooms.Count == 0)
+        {
+            throw new System.Exception("No Room prefabs assigned to the MapGenerator.rooms list!");
+        }
         Room newRoomPrefab = rooms[Random.Range(0, rooms.Count)];
         bool breakOut = false;
         while (!breakOut && randomRooms.Count > 0)
@@ -95,101 +105,25 @@ public class MapGenerator : MonoBehaviour
                     break;
                 }
             }
-            randomRooms.RemoveAt(rand);
+            //randomRooms.RemoveAt(rand);
         }
         GameObject newRoom = newRoomPrefab.Place(offset);
         generated_objects.Add(newRoom);
         occupied.Add(offset);
+        Debug.Log($"Placed room at {offset} with {newRoomPrefab.name}");
 
+        List<Door> newDoors = newRoomPrefab.GetDoors(offset);
+        Door.Direction oppositeDirection = currentDoor.GetMatchingDirection();
+        foreach (Door door in newDoors)
+        {
+            if (door.GetDirection() != oppositeDirection)
+            {
+                doors.Add(door);
+            }
+        }
+        GenerateWithBacktracking(occupied, new List<Door>(doors), depth + 1);
         if (iterations > THRESHOLD) throw new System.Exception("Iteration limit exceeded");
         return false;
-
-        /*
-        Debug.Log("Entered GenerateWithBackTracking.");
-        iterations++;
-        if (doors.Count == 0)
-        {
-            if (occupied.Count == 0) return true;
-            else return false;
-        }
-        Debug.Log("Breakpoint 2.");
-        Door currentDoor = doors[doors.Count - 1];
-        doors.RemoveAt(doors.Count - 1);
-
-        Hallway HallwayPFB = currentDoor.IsVertical() ? vertical_hallway : horizontal_hallway;
-        GameObject newHallway = HallwayPFB.Place(currentDoor);
-        generated_objects.Add(newHallway);
-        
-        List<(Room, Vector2Int, Door)> possible = new List<(Room, Vector2Int, Door)>();
-        foreach (Room room in rooms)
-        {
-            // Debug.Log($"Iterating through room loop. Room: {room.name}");
-            foreach (Door roomDoor in room.GetDoors())
-            {
-
-
-                // Debug.Log($"Iterating through door loop. RoomDoor: {roomDoor}, Direction: {roomDoor.GetDirection()}, CurrentDoor: {currentDoor}, MatchingDirection: {currentDoor.GetMatchingDirection()}");
-                if (roomDoor.GetDirection() == currentDoor.GetMatchingDirection())
-                {   
-                    Debug.Log($"CURRENTDOOR COORD:  + {currentDoor.GetGridCoordinates()}, ROOMDOOR COORD: {roomDoor.GetGridCoordinates()}");
-                    Vector2Int offset = currentDoor.GetGridCoordinates() - roomDoor.GetGridCoordinates(); // Problem might be here
-                    // Debug.Log($"Trying offset: {offset} for Room: {room.name}, RoomDoor: {roomDoor}");
-
-                    bool overlap = false;
-                    var candidateCoords = room.GetGridCoordinates(offset);
-                    foreach (Vector2Int coordinate in candidateCoords)
-                    {
-                        if (occupied.Contains(coordinate))
-                        {
-                            overlap = true;
-                            // Debug.Log($"Overlap detected at {coordinate} for Room: {room.name} with offset {offset}");
-                            break;
-                        }
-                    }
-                    if (!overlap)
-                    {
-                        // Debug.Log($"Possible placement: Room {room.name} at offset {offset} via RoomDoor {roomDoor}");
-                        possible.Add((room, offset, roomDoor));
-                    }
-                }
-            }
-        }
-        Debug.Log($"Possible rooms: {possible.Count}");
-
-        if (possible.Count == 0)
-        {
-            Debug.LogWarning($"No possible placements for currentDoor {currentDoor}. Occupied: [{string.Join(", ", occupied)}]");
-            doors.Add(currentDoor);
-            return false;
-        }
-
-        Debug.Log("Breakpoint 4.");
-        foreach (var (room, offset, roomDoor) in possible)
-        {
-            List<Vector2Int> newCoordinates = room.GetGridCoordinates(offset);
-            occupied.AddRange(newCoordinates);
-
-            List<Door> newDoors = room.GetDoors(offset);
-            newDoors.RemoveAll(d => d.GetGridCoordinates() == roomDoor.GetGridCoordinates() && d.GetDirection() == roomDoor.GetDirection());
-            List<Door> nextDoors = new List<Door>(doors);
-            nextDoors.AddRange(newDoors);
-
-            if (GenerateWithBacktracking(occupied, nextDoors, depth + 1))
-            {
-                generated_objects.Add(room.Place(offset));
-                return true;
-            }
-
-            foreach (Vector2Int coordinate in newCoordinates)
-            {
-                occupied.Remove(coordinate);
-            }
-        }
-        Debug.Log("Breakpoint 5.");
-        doors.Add(currentDoor);
-        if (iterations > THRESHOLD) throw new System.Exception("Iteration limit exceeded");
-        return false;
-        */
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
