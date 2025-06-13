@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
+using JetBrains.Annotations;
 
 public class MapGenerator : MonoBehaviour
 {
@@ -23,7 +24,7 @@ public class MapGenerator : MonoBehaviour
 
     // keep the instantiated rooms and hallways here 
     private List<GameObject> generated_objects;
-    
+
     int iterations;
 
     public void Generate()
@@ -34,8 +35,8 @@ public class MapGenerator : MonoBehaviour
             Destroy(go);
         }
         generated_objects.Clear();
-        
-        generated_objects.Add(start.Place(new Vector2Int(0,0)));
+
+        generated_objects.Add(start.Place(new Vector2Int(0, 0)));
         List<Door> doors = start.GetDoors();
         List<Vector2Int> occupied = new List<Vector2Int>();
         occupied.Add(new Vector2Int(0, 0));
@@ -46,7 +47,65 @@ public class MapGenerator : MonoBehaviour
 
     bool GenerateWithBacktracking(List<Vector2Int> occupied, List<Door> doors, int depth)
     {
-        Debug.Log("Entered GenerateWitBackTracking.");
+        Debug.Log("Entered GenerateWithBackTracking.");
+        iterations++;
+        if (doors.Count == 0)
+        {
+            if (occupied.Count == 0) return true;
+            else return false;
+        }
+        Door currentDoor = doors[doors.Count - 1];
+        doors.RemoveAt(doors.Count - 1);
+
+        Hallway HallwayPFB = currentDoor.IsVertical() ? vertical_hallway : horizontal_hallway;
+        GameObject newHallway = HallwayPFB.Place(currentDoor);
+        generated_objects.Add(newHallway);
+
+        Vector2Int offset = Vector2Int.zero;
+        switch (currentDoor.GetDirection())
+        {
+            case Door.Direction.NORTH:
+                offset = currentDoor.GetGridCoordinates() + new Vector2Int(0, 1);
+                break;
+            case Door.Direction.SOUTH:
+                offset = currentDoor.GetGridCoordinates() + new Vector2Int(0, -1);
+                break;
+            case Door.Direction.EAST:
+                offset = currentDoor.GetGridCoordinates() + new Vector2Int(1, 0);
+                break;
+            case Door.Direction.WEST:
+                offset = currentDoor.GetGridCoordinates() + new Vector2Int(-1, 0);
+                break;
+        }
+
+        // Create a new room from the hallway
+        List<Room> randomRooms = rooms;
+        Room newRoomPrefab = rooms[Random.Range(0, rooms.Count)];
+        bool breakOut = false;
+        while (!breakOut && randomRooms.Count > 0)
+        // Pick random rooms to see if they can connect
+        {
+            int rand = Random.Range(0, randomRooms.Count);
+            foreach (Door door in randomRooms[rand].GetDoors())
+            {
+                if (door.GetMatchingDirection() == currentDoor.GetDirection())
+                {
+                    newRoomPrefab = randomRooms[rand];
+                    breakOut = true;
+                    break;
+                }
+            }
+            randomRooms.RemoveAt(rand);
+        }
+        GameObject newRoom = newRoomPrefab.Place(offset);
+        generated_objects.Add(newRoom);
+        occupied.Add(offset);
+
+        if (iterations > THRESHOLD) throw new System.Exception("Iteration limit exceeded");
+        return false;
+
+        /*
+        Debug.Log("Entered GenerateWithBackTracking.");
         iterations++;
         if (doors.Count == 0)
         {
@@ -57,17 +116,24 @@ public class MapGenerator : MonoBehaviour
         Door currentDoor = doors[doors.Count - 1];
         doors.RemoveAt(doors.Count - 1);
 
+        Hallway HallwayPFB = currentDoor.IsVertical() ? vertical_hallway : horizontal_hallway;
+        GameObject newHallway = HallwayPFB.Place(currentDoor);
+        generated_objects.Add(newHallway);
+        
         List<(Room, Vector2Int, Door)> possible = new List<(Room, Vector2Int, Door)>();
         foreach (Room room in rooms)
         {
-            Debug.Log($"Iterating through room loop. Room: {room.name}");
+            // Debug.Log($"Iterating through room loop. Room: {room.name}");
             foreach (Door roomDoor in room.GetDoors())
             {
-                Debug.Log($"Iterating through door loop. RoomDoor: {roomDoor}, Direction: {roomDoor.GetDirection()}, CurrentDoor: {currentDoor}, MatchingDirection: {currentDoor.GetMatchingDirection()}");
+
+
+                // Debug.Log($"Iterating through door loop. RoomDoor: {roomDoor}, Direction: {roomDoor.GetDirection()}, CurrentDoor: {currentDoor}, MatchingDirection: {currentDoor.GetMatchingDirection()}");
                 if (roomDoor.GetDirection() == currentDoor.GetMatchingDirection())
-                {
-                    Vector2Int offset = currentDoor.GetGridCoordinates() - roomDoor.GetGridCoordinates();
-                    Debug.Log($"Trying offset: {offset} for Room: {room.name}, RoomDoor: {roomDoor}");
+                {   
+                    Debug.Log($"CURRENTDOOR COORD:  + {currentDoor.GetGridCoordinates()}, ROOMDOOR COORD: {roomDoor.GetGridCoordinates()}");
+                    Vector2Int offset = currentDoor.GetGridCoordinates() - roomDoor.GetGridCoordinates(); // Problem might be here
+                    // Debug.Log($"Trying offset: {offset} for Room: {room.name}, RoomDoor: {roomDoor}");
 
                     bool overlap = false;
                     var candidateCoords = room.GetGridCoordinates(offset);
@@ -76,13 +142,13 @@ public class MapGenerator : MonoBehaviour
                         if (occupied.Contains(coordinate))
                         {
                             overlap = true;
-                            Debug.Log($"Overlap detected at {coordinate} for Room: {room.name} with offset {offset}");
+                            // Debug.Log($"Overlap detected at {coordinate} for Room: {room.name} with offset {offset}");
                             break;
                         }
                     }
                     if (!overlap)
                     {
-                        Debug.Log($"Possible placement: Room {room.name} at offset {offset} via RoomDoor {roomDoor}");
+                        // Debug.Log($"Possible placement: Room {room.name} at offset {offset} via RoomDoor {roomDoor}");
                         possible.Add((room, offset, roomDoor));
                     }
                 }
@@ -123,6 +189,7 @@ public class MapGenerator : MonoBehaviour
         doors.Add(currentDoor);
         if (iterations > THRESHOLD) throw new System.Exception("Iteration limit exceeded");
         return false;
+        */
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
