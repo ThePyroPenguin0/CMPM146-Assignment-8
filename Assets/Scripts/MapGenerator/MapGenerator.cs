@@ -10,7 +10,7 @@ public class MapGenerator : MonoBehaviour
     public Hallway horizontal_hallway;
     public Room start;
     public Room target;
-
+    public List<Room> deadEndRooms;
     // Constraint: How big should the dungeon be at most
     // this will limit the run time (~10 is a good value 
     // during development, later you'll want to set it to 
@@ -42,7 +42,27 @@ public class MapGenerator : MonoBehaviour
         List<Vector2Int> occupied = new List<Vector2Int>();
         occupied.Add(new Vector2Int(0, 0));
         iterations = 0;
-        GenerateWithBacktracking(occupied, doors, 1);
+
+        try // In space, nobody can hear your exceptions throwing
+        {
+            GenerateWithBacktracking(occupied, doors, 1);
+        }
+        catch (System.Exception ex)
+        {
+            if (ex.Message == "Iteration limit exceeded")
+            {
+                foreach (var go in generated_objects)
+                {
+                    Destroy(go);
+                }
+                generated_objects.Clear();
+                Generate();
+            }
+            else
+            {
+                throw;
+            }
+        }
     }
 
 
@@ -77,7 +97,11 @@ public class MapGenerator : MonoBehaviour
             if (occupied.Contains(offset)) continue;
 
             List<Room> compatibleRooms = new List<Room>();
-            foreach (Room room in rooms)
+
+            bool isPlacingLastRoom = (occupied.Count + 1 == MAX_SIZE);
+            IEnumerable<Room> roomSource = isPlacingLastRoom ? deadEndRooms : rooms;
+
+            foreach (Room room in roomSource)
             {
                 foreach (Door door in room.GetDoors())
                 {
@@ -88,6 +112,7 @@ public class MapGenerator : MonoBehaviour
                     }
                 }
             }
+            if (compatibleRooms.Count == 0) continue;
             if (compatibleRooms.Count == 0) continue;
 
             for (int i = 0; i < compatibleRooms.Count; i++)

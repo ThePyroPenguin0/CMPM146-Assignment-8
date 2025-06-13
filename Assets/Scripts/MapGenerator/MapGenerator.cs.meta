@@ -1,2 +1,15 @@
 fileFormatVersion: 2
 guid: a66ce9ff93b96de4a8da2ef309874395
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - vertical_hallway: {instanceID: 0}
+  - horizontal_hallway: {instanceID: 0}
+  - start: {instanceID: 0}
+  - target: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
