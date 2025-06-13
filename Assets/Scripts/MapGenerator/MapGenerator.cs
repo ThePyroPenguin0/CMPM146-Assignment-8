@@ -16,6 +16,7 @@ public class MapGenerator : MonoBehaviour
     // during development, later you'll want to set it to 
     // something a bit higher, like 25-30)
     public int MAX_SIZE;
+    public int MIN_SIZE = 5;
 
     // set this to a high value when the generator works
     // for debugging it can be helpful to test with few rooms
@@ -47,81 +48,130 @@ public class MapGenerator : MonoBehaviour
 
     bool GenerateWithBacktracking(List<Vector2Int> occupied, List<Door> doors, int depth)
     {
-        Debug.Log($"Entered GenerateWithBackTracking. Depth: {depth}");
+        //Debug.Log($"Entered GenerateWithBackTracking. Depth: {depth}");
         iterations++;
         if (depth > MAX_SIZE)
         {
-            Debug.LogWarning("Reached maximum depth, stopping generation.");
+            Debug.LogWarning($"Reached maximum depth, stopping generation. Depth: {depth} Max_size: {MAX_SIZE}");
             return false;
         }
         if (doors.Count == 0)
         {
-            if (occupied.Count == 0) return true;
-            else return false;
+            return (occupied.Count >= MIN_SIZE);
         }
 
-        Door currentDoor = doors[doors.Count - 1];
-        doors.RemoveAt(doors.Count - 1);
-
-        Hallway HallwayPFB = currentDoor.IsVertical() ? vertical_hallway : horizontal_hallway;
-        GameObject newHallway = HallwayPFB.Place(currentDoor);
-        generated_objects.Add(newHallway);
-
-        Vector2Int offset = Vector2Int.zero;
-        switch (currentDoor.GetDirection())
+        for (int doorIdx = doors.Count - 1; doorIdx >= 0; doorIdx--)
         {
-            case Door.Direction.NORTH:
-                offset = currentDoor.GetGridCoordinates() + new Vector2Int(0, 1);
-                break;
-            case Door.Direction.SOUTH:
-                offset = currentDoor.GetGridCoordinates() + new Vector2Int(0, -1);
-                break;
-            case Door.Direction.EAST:
-                offset = currentDoor.GetGridCoordinates() + new Vector2Int(1, 0);
-                break;
-            case Door.Direction.WEST:
-                offset = currentDoor.GetGridCoordinates() + new Vector2Int(-1, 0);
-                break;
-        }
+            Door currentDoor = doors[doorIdx];
+            List<Door> remainingDoors = new List<Door>(doors);
+            remainingDoors.RemoveAt(doorIdx);
 
-        // Create a new room from the hallway
-        List<Room> randomRooms = rooms;
-        if (randomRooms == null || randomRooms.Count == 0)
-        {
-            throw new System.Exception("No Room prefabs assigned to the MapGenerator.rooms list!");
-        }
-        Room newRoomPrefab = rooms[Random.Range(0, rooms.Count)];
-        bool breakOut = false;
-        while (!breakOut && randomRooms.Count > 0)
-        // Pick random rooms to see if they can connect
-        {
-            int rand = Random.Range(0, randomRooms.Count);
-            foreach (Door door in randomRooms[rand].GetDoors())
+            Vector2Int offset = Vector2Int.zero;
+            switch (currentDoor.GetDirection())
             {
-                if (door.GetMatchingDirection() == currentDoor.GetDirection())
+                case Door.Direction.NORTH: offset = currentDoor.GetGridCoordinates() + new Vector2Int(0, 1); break;
+                case Door.Direction.SOUTH: offset = currentDoor.GetGridCoordinates() + new Vector2Int(0, -1); break;
+                case Door.Direction.EAST:  offset = currentDoor.GetGridCoordinates() + new Vector2Int(1, 0); break;
+                case Door.Direction.WEST:  offset = currentDoor.GetGridCoordinates() + new Vector2Int(-1, 0); break;
+            }
+            if (occupied.Contains(offset)) continue;
+
+            List<Room> compatibleRooms = new List<Room>();
+            foreach (Room room in rooms)
+            {
+                foreach (Door door in room.GetDoors())
                 {
-                    newRoomPrefab = randomRooms[rand];
-                    breakOut = true;
-                    break;
+                    if (door.GetMatchingDirection() == currentDoor.GetDirection())
+                    {
+                        compatibleRooms.Add(room);
+                        break;
+                    }
                 }
             }
-            //randomRooms.RemoveAt(rand);
-        }
-        GameObject newRoom = newRoomPrefab.Place(offset);
-        generated_objects.Add(newRoom);
-        occupied.Add(offset);
-        Debug.Log($"Placed room at {offset} with {newRoomPrefab.name}");
+            if (compatibleRooms.Count == 0) continue;
 
-        List<Door> newDoors = newRoomPrefab.GetDoors(offset);
-        Door.Direction oppositeDirection = currentDoor.GetMatchingDirection();
-        foreach (Door door in newDoors)
-        {
-            if (door.GetDirection() != oppositeDirection)
+            for (int i = 0; i < compatibleRooms.Count; i++)
             {
-                doors.Add(door);
+                int j = Random.Range(i, compatibleRooms.Count);
+                var temp = compatibleRooms[i];
+                compatibleRooms[i] = compatibleRooms[j];
+                compatibleRooms[j] = temp;
+            }
+
+            foreach (Room candidate in compatibleRooms)
+            {
+                List<Door> candidateDoors = candidate.GetDoors(offset);
+                Door.Direction oppositeDirection = currentDoor.GetMatchingDirection();
+                bool adjacencyValid = true;
+                foreach (Door door in candidateDoors)
+                {
+                    if (door.GetDirection() == oppositeDirection)
+                        continue;
+
+                    Vector2Int adjacentOffset = offset;
+                    switch (door.GetDirection())
+                    {
+                        case Door.Direction.NORTH: adjacentOffset += new Vector2Int(0, 1); break;
+                        case Door.Direction.SOUTH: adjacentOffset += new Vector2Int(0, -1); break;
+                        case Door.Direction.EAST:  adjacentOffset += new Vector2Int(1, 0); break;
+                        case Door.Direction.WEST:  adjacentOffset += new Vector2Int(-1, 0); break;
+                    }
+
+                    if (occupied.Contains(adjacentOffset))
+                    {
+                        Room adjacentRoom = null;
+                        foreach (GameObject obj in generated_objects)
+                        {
+                            Room r = obj.GetComponent<Room>();
+                            if (r != null)
+                            {
+                                List<Vector2Int> coords = r.GetGridCoordinates(adjacentOffset);
+                                if (coords.Contains(adjacentOffset))
+                                {
+                                    adjacentRoom = r;
+                                    break;
+                                }
+                            }
+                        }
+                        if (adjacentRoom != null)
+                        {
+                            Door.Direction matchingDir = door.GetMatchingDirection();
+                            if (!adjacentRoom.HasDoorOnSide(matchingDir))
+                            {
+                                adjacencyValid = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!adjacencyValid) continue;
+
+                occupied.Add(offset);
+
+                List<Door> newDoors = new List<Door>();
+                foreach (Door door in candidateDoors)
+                {
+                    if (door.GetDirection() != oppositeDirection)
+                        newDoors.Add(door);
+                }
+                newDoors.AddRange(remainingDoors);
+
+                if (GenerateWithBacktracking(occupied, newDoors, depth + 1))
+                {
+                    Hallway HallwayPFB = currentDoor.IsVertical() ? vertical_hallway : horizontal_hallway;
+                    GameObject newHallway = HallwayPFB.Place(currentDoor);
+                    generated_objects.Add(newHallway);
+
+                    GameObject newRoom = candidate.Place(offset);
+                    generated_objects.Add(newRoom);
+
+                    return true;
+                }
+
+                occupied.RemoveAt(occupied.Count - 1);
             }
         }
-        GenerateWithBacktracking(occupied, new List<Door>(doors), depth + 1);
+
         if (iterations > THRESHOLD) throw new System.Exception("Iteration limit exceeded");
         return false;
     }
